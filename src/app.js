@@ -21,7 +21,7 @@ const app = express();
 
 app.use(
     cors({
-        origin: "http://localhost:5173", // Vite frontend
+        origin: "https://noteswift-beta.onrender.com", // Vite frontend
         credentials: true,
     })
 );
