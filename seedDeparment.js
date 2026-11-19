@@ -6,45 +6,51 @@ dotenv.config();
 
 const departments = [
   {
-    name: "Software Development",
-    code: "SD",
-    description: "Software development and engineering",
+    name: "Academics",
+    code: "ACAD",
+    description: "Curriculum development, instructors, and student assessment (CAO)",
+    status: "Active",
+  },
+  {
+    name: "Technology",
+    code: "TECH",
+    description: "Software engineering, dev sprints, and IT infrastructure (CTO)",
     status: "Active",
   },
   {
     name: "Finance",
     code: "FIN",
-    description: "Finance and accounting",
+    description: "Financial planning, accounting, budgets, invoices, and payroll (CFO)",
     status: "Active",
   },
   {
     name: "Human Resources",
     code: "HR",
-    description: "Human resources and employee management",
-    status: "Active",
-  },
-  {
-    name: "Marketing",
-    code: "MKT",
-    description: "Marketing and promotion",
-    status: "Active",
-  },
-  {
-    name: "Sales",
-    code: "SAL",
-    description: "Sales and business development",
+    description: "Talent acquisition, employee lifecycle, attendance, and leaves (CHRO)",
     status: "Active",
   },
   {
     name: "Operations",
     code: "OPS",
-    description: "Daily business operations",
+    description: "Facilities, equipment inventory, vendor management, and logistics (COO)",
+    status: "Active",
+  },
+  {
+    name: "Marketing",
+    code: "MKT",
+    description: "Brand campaigns, inbound lead acquisition, and social channels (CMO)",
+    status: "Active",
+  },
+  {
+    name: "Sales",
+    code: "SAL",
+    description: "Corporate B2B partnerships, retail learner sales, and revenue pipeline (CCO)",
     status: "Active",
   },
   {
     name: "Administration",
     code: "ADM",
-    description: "Administrative operations",
+    description: "Executive office, corporate governance, and root administration (CEO / Super Admin)",
     status: "Active",
   },
 ];
@@ -65,10 +71,10 @@ const seedDepartments = async () => {
       );
     }
 
-    console.log("Departments seeded successfully.");
+    console.log("✅ All 8 Enterprise Departments seeded successfully matching NoteSwift Org Chart.");
     process.exit(0);
   } catch (error) {
-    console.error("Department seeding failed:", error);
+    console.error("❌ Department seeding failed:", error);
     process.exit(1);
   }
 };

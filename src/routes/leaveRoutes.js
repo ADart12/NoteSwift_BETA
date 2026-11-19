@@ -8,35 +8,24 @@ import {
   getLeaveById,
   rejectLeave,
   approveLeave,
-  getLeaveSummary
+  getLeaveSummary,
 } from "../controllers/leaveController.js";
 import protect from "../middleware/authMiddleware.js";
-import {authorizeRoles} from "../middleware/authorizeRole.js";
-import { authorizeDepartment } from "../middleware/authorizeDepartment.js";
+import { authorizeRoles } from "../middleware/authorizeRole.js";
 
 const router = express.Router();
 
-// Employee Routes
-router.post("/",protect, authorizeRoles("employee"),applyLeave);
+// Authenticated Employee (all staff) Routes
+router.post("/", protect, applyLeave);
+router.get("/me", protect, getMyLeaves);
+router.get("/me/:id", protect, getMyLeaveById);
+router.delete("/:id", protect, deleteLeave);
 
-router.get("/me",protect, authorizeRoles("employee"), getMyLeaves);
-
-router.get("/me/:id", protect, authorizeRoles("employee"), getMyLeaveById);
-
-router.delete("/:id",protect, authorizeRoles("employee"), deleteLeave);
-
-
-
-// HR/Admin Routes
-router.get("/",protect, authorizeRoles("admin", "manager"), authorizeDepartment("HR"), getAllLeaves);
-
-router.get("/summary",protect, authorizeRoles("admin", "manager"), authorizeDepartment("HR"), getLeaveSummary);
-
-router.get("/:id",protect,authorizeRoles("admin", "manager"), authorizeDepartment("HR") , getLeaveById);
-
-router.patch("/:id/approve", protect, authorizeRoles("admin", "manager"), authorizeDepartment("HR"), approveLeave);
-
-router.patch("/:id/reject", protect, authorizeRoles("admin", "manager"), authorizeDepartment("HR"), rejectLeave);
-
+// Management / HR / Admin Routes
+router.get("/", protect, authorizeRoles("admin", "manager"), getAllLeaves);
+router.get("/summary", protect, authorizeRoles("admin", "manager"), getLeaveSummary);
+router.get("/:id", protect, authorizeRoles("admin", "manager"), getLeaveById);
+router.patch("/:id/approve", protect, authorizeRoles("admin", "manager"), approveLeave);
+router.patch("/:id/reject", protect, authorizeRoles("admin", "manager"), rejectLeave);
 
 export default router;

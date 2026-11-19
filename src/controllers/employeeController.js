@@ -1,4 +1,9 @@
+import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 import User from "../models/usersModel.js";
+import Department from "../models/DepartmentModel.js";
+import AuditLog from "../models/auditLogModel.js";
+import { generateEmployeeId } from "../utils/generateEmployeeId.js";
 
 export const getEmployees = async (req, res) => {
   try {
@@ -15,7 +20,7 @@ export const getEmployees = async (req, res) => {
       isDeleted: false,
     };
 
-    // Search
+    // Search by name, email, or employeeId
     if (search) {
       query.$or = [
         { fullName: { $regex: search, $options: "i" } },
@@ -24,55 +29,71 @@ export const getEmployees = async (req, res) => {
       ];
     }
 
-    // Filters
-    if (department) {
-      query.department = department;
+    // Filter by department (ObjectId or Name/Code)
+    if (department && department !== "All") {
+      if (mongoose.Types.ObjectId.isValid(department)) {
+        query.department = department;
+      } else {
+        const foundDept = await Department.findOne({
+          $or: [
+            { name: { $regex: `^${department}$`, $options: "i" } },
+            { code: department.toUpperCase() },
+          ],
+        });
+        if (foundDept) {
+          query.department = foundDept._id;
+        } else {
+          query.department = new mongoose.Types.ObjectId(); // Guarantee 0 results if dept not found
+        }
+      }
     }
 
     if (role) {
-      query.role = role;
+      query.role = role.toLowerCase();
     }
 
-    if (status) {
-      query.status = status;
+    if (status && status !== "All") {
+      query.status = status.toLowerCase();
     }
 
-    const pageNumber = Number(page);
-    const limitNumber = Number(limit);
-
+    const pageNumber = Math.max(1, Number(page) || 1);
+    const limitNumber = Math.max(1, Number(limit) || 10);
     const skip = (pageNumber - 1) * limitNumber;
 
-    const employees = await User.find(query)
-      .select("-password")
-      .skip(skip)
-      .limit(Number(limit))
-      .sort({ createdAt: -1 });
-
-    const totalEmployees = await User.countDocuments(query);
+    const [employees, totalEmployees] = await Promise.all([
+      User.find(query)
+        .select("-password")
+        .populate("department", "name code")
+        .skip(skip)
+        .limit(limitNumber)
+        .sort({ createdAt: -1 }),
+      User.countDocuments(query),
+    ]);
 
     res.status(200).json({
       success: true,
       totalEmployees,
-      currentPage: Number(page),
-      totalPages: Math.ceil(totalEmployees / limit),
+      currentPage: pageNumber,
+      totalPages: Math.ceil(totalEmployees / limitNumber) || 1,
       employees,
     });
   } catch (error) {
+    console.error("Get Employees Error:", error);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to fetch employees",
     });
   }
 };
 
-
 // get Employee by ID
-
 export const getEmployeeById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const employee = await User.findById(id).select("-password");
+    const employee = await User.findById(id)
+      .select("-password")
+      .populate("department", "name code");
 
     if (!employee) {
       return res.status(404).json({
@@ -87,16 +108,12 @@ export const getEmployeeById = async (req, res) => {
     });
   } catch (error) {
     console.error("Get Employee By ID Error:", error);
-
     res.status(500).json({
       success: false,
       message: "Server Error",
     });
   }
 };
-
-
-
 
 export const updateEmployee = async (req, res) => {
   try {
@@ -134,22 +151,23 @@ export const updateEmployee = async (req, res) => {
 
     await employee.save();
 
+    const updatedEmployee = await User.findById(id)
+      .select("-password")
+      .populate("department", "name code");
+
     res.status(200).json({
       success: true,
       message: "Employee updated successfully",
-      employee,
+      employee: updatedEmployee,
     });
   } catch (error) {
     console.error("Update Employee Error:", error);
-
     res.status(500).json({
       success: false,
       message: "Server Error",
     });
   }
 };
-
-
 
 export const updateEmployeeStatus = async (req, res) => {
   try {
@@ -173,7 +191,6 @@ export const updateEmployeeStatus = async (req, res) => {
     }
 
     employee.status = status;
-
     await employee.save();
 
     res.status(200).json({
@@ -183,16 +200,12 @@ export const updateEmployeeStatus = async (req, res) => {
     });
   } catch (error) {
     console.error("Update Employee Status Error:", error);
-
     res.status(500).json({
       success: false,
       message: "Server Error",
     });
   }
 };
-
-
-
 
 export const deleteEmployee = async (req, res) => {
   try {
@@ -209,6 +222,7 @@ export const deleteEmployee = async (req, res) => {
 
     employee.isDeleted = true;
     employee.status = "inactive";
+    employee.deletedAt = new Date();
 
     await employee.save();
 
@@ -218,7 +232,6 @@ export const deleteEmployee = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete Employee Error:", error);
-
     res.status(500).json({
       success: false,
       message: "Server Error",
@@ -226,4 +239,137 @@ export const deleteEmployee = async (req, res) => {
   }
 };
 
+// Direct Employee Creation (Admin & Manager)
+export const createEmployee = async (req, res) => {
+  try {
+    const {
+      fullName,
+      email,
+      phone,
+      departmentId,
+      department,
+      designation,
+      role = "employee",
+      password,
+      joiningDate,
+      dateOfBirth,
+      address,
+      city,
+      country,
+      status = "active",
+    } = req.body;
 
+    const deptId = departmentId || department;
+
+    if (!fullName || !email || !phone || !deptId || !designation) {
+      return res.status(400).json({
+        success: false,
+        message: "Full name, email, phone, department, and designation are required.",
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "An employee with this email address already exists.",
+      });
+    }
+
+    // Find department
+    let departmentDoc;
+    if (mongoose.Types.ObjectId.isValid(deptId)) {
+      departmentDoc = await Department.findById(deptId);
+    } else {
+      departmentDoc = await Department.findOne({
+        $or: [
+          { name: { $regex: `^${deptId}$`, $options: "i" } },
+          { code: String(deptId).toUpperCase() },
+        ],
+      });
+    }
+
+    if (!departmentDoc) {
+      return res.status(400).json({
+        success: false,
+        message: "Specified department does not exist.",
+      });
+    }
+
+    // Generate unique employee ID for department
+    const employeeId = await generateEmployeeId(
+      departmentDoc.name,
+      departmentDoc.code
+    );
+
+    // Initial password setup
+    const plainPassword = password && password.trim().length >= 6 ? password.trim() : "NoteSwift@123";
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+    const newEmployee = await User.create({
+      employeeId,
+      fullName: fullName.trim(),
+      email: email.toLowerCase().trim(),
+      phone: phone.trim(),
+      department: departmentDoc._id,
+      designation: designation.trim(),
+      role: role.toLowerCase(),
+      password: hashedPassword,
+      joiningDate: joiningDate ? new Date(joiningDate) : new Date(),
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+      address: address ? address.trim() : "",
+      city: city ? city.trim() : "",
+      country: country ? country.trim() : "Nepal",
+      status: status || "active",
+    });
+
+    // Optional audit log
+    try {
+      if (req.user?._id) {
+        await AuditLog.create({
+          performedBy: req.user._id,
+          action: "CREATE",
+          entity: "EMPLOYEE",
+          entityId: String(newEmployee._id),
+          newState: {
+            employeeId,
+            fullName: newEmployee.fullName,
+            email: newEmployee.email,
+            department: departmentDoc.name,
+            role: newEmployee.role,
+          },
+          ipAddress: req.ip || "",
+          userAgent: req.headers["user-agent"] || "",
+        });
+      }
+    } catch (auditErr) {
+      console.warn("Audit log creation notice:", auditErr.message);
+    }
+
+    const populatedEmployee = await User.findById(newEmployee._id)
+      .select("-password")
+      .populate("department", "name code");
+
+    return res.status(201).json({
+      success: true,
+      message: `Employee ${fullName} created successfully with ID ${employeeId}.`,
+      employee: populatedEmployee,
+      credentials: {
+        employeeId,
+        fullName: fullName.trim(),
+        email: email.toLowerCase().trim(),
+        temporaryPassword: plainPassword,
+        role: role.toLowerCase(),
+        departmentName: departmentDoc.name,
+        designation: designation.trim(),
+      },
+    });
+  } catch (error) {
+    console.error("Create Employee Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to create employee",
+    });
+  }
+};

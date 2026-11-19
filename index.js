@@ -1,24 +1,21 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from backend directory if present, or cwd
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config();
+
 import app from './src/app.js';
 import { connectDB } from './src/cofig/dbConfig.js';
 import "./src/scheduler/attendenceScheduler.js";
 
 connectDB();
 
-app.listen(3000, () => {
-    console.log("Sever is listing at post 3000")
-})
-
-
-
-
-
-
-
-
-
-
-//bhattaaditya976_db_user
-//uRuNBu5s7jeqIMO5
-
-//mongodb+srv://bhattaaditya976_db_user:<db_password>@cluster0.woxdc0n.mongodb.net/?appName=Cluster0
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is listening at port ${PORT}`);
+});

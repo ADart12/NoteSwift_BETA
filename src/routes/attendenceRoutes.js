@@ -8,41 +8,33 @@ import {
   getEmployeeAttendanceHistory,
   getMyAttendanceSummary,
   markAbsentEmployeesController,
-  
 } from "../controllers/attendenceController.js";
 
 import authMiddleware from "../middleware/authMiddleware.js";
 import { authorizeRoles } from "../middleware/authorizeRole.js";
-import { authorizeDepartment } from "../middleware/authorizeDepartment.js";
 
 const router = express.Router();
 
-/* ============================
-   Employee Routes
-============================ */
-
+/* ===================================================
+   Employee Self Attendance (Webcam Photo + Geo-Tag)
+=================================================== */
 router.get("/me", authMiddleware, getMyAttendance);
-
+router.post("/check-in", authMiddleware, checkIn);
+router.patch("/check-out", authMiddleware, checkOut);
 router.get("/me/history", authMiddleware, getMyAttendanceHistory);
-
 router.get("/my/summary", authMiddleware, getMyAttendanceSummary);
 
+/* ===================================================
+   Admin & Manager Monitoring & Historical Tracking
+=================================================== */
+router.get("/today", authMiddleware, getTodayAttendance);
+router.get(
+  "/:employeeId/history",
+  authMiddleware,
+  authorizeRoles("admin", "manager"),
+  getEmployeeAttendanceHistory
+);
+
 router.post("/mark-absent", markAbsentEmployeesController);
-
-
-
-/* ============================
-   HR / Admin Routes
-============================ */
-
-router.post("/check-in",authMiddleware, authorizeRoles("admin", "manager"), authorizeDepartment("HR"), checkIn );
-
-router.patch("/check-out", authMiddleware, authorizeRoles("admin", "manager"),authorizeDepartment("HR"), checkOut);
-
-
-router.get("/today", authMiddleware, authorizeRoles("admin", "manager"), authorizeDepartment("HR"), getTodayAttendance);
-
-router.get( "/:employeeId/history", authMiddleware, authorizeRoles("admin", "manager"),authorizeDepartment("HR"),  getEmployeeAttendanceHistory);
-
 
 export default router;

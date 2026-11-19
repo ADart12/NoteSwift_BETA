@@ -1,13 +1,18 @@
 import Attendance from "../models/attendanceModel.js";
 import User from "../models/usersModel.js";
-import { nepaliDate } from "../utils/dateUtils.js"; // or your BS converter
 import OfficeSettings from "../models/officeSetting.js";
-import { calculateLateStatus, calculateCheckoutDetails, getDateRange } from '../utils/dateUtils.js';
+import {
+  nepaliDate,
+  formatTime,
+  calculateLateStatus,
+  calculateCheckoutDetails,
+  getDateRange,
+} from "../utils/dateUtils.js";
 
-
+// Employee retrieves their own today's attendance status
 export const getMyAttendance = async (req, res) => {
   try {
-    const employeeId = req.user._id;
+    const employeeId = req.user._id || req.user.id;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -17,19 +22,13 @@ export const getMyAttendance = async (req, res) => {
       dateAD: today,
     }).populate(
       "employee",
-      "employeeId fullName email department designation role"
+      "employeeId fullName email department designation role profileImage"
     );
-
-    if (!attendance) {
-      return res.status(404).json({
-        success: false,
-        message: "Today's attendance not found.",
-      });
-    }
 
     return res.status(200).json({
       success: true,
-      attendance,
+      attendance: attendance || null,
+      message: attendance ? "Today's attendance retrieved" : "Not checked in yet today",
     });
   } catch (error) {
     console.error("Get My Attendance Error:", error);
@@ -41,25 +40,17 @@ export const getMyAttendance = async (req, res) => {
   }
 };
 
-
+// Employee self check-in with webcam photo & geo-location
 export const checkIn = async (req, res) => {
   try {
-    const { employee } = req.body;      //employee -> employeeId
+    const employeeId = req.user._id || req.user.id;
+    const { photo, location } = req.body;
 
-    if (!employee) {
-      return res.status(400).json({
-        success: false,
-        message: "Employee is required.",
-      });
-    }
-
-    // Check employee exists
-    const employeeExists = await User.findById(employee);
-
+    const employeeExists = await User.findById(employeeId);
     if (!employeeExists) {
       return res.status(404).json({
         success: false,
-        message: "Employee not found.",
+        message: "Employee account not found.",
       });
     }
 
@@ -69,24 +60,26 @@ export const checkIn = async (req, res) => {
 
     // Prevent duplicate attendance
     const alreadyMarked = await Attendance.findOne({
-      employee,
+      employee: employeeId,
       dateAD: today,
     });
 
-    if (alreadyMarked) {
+    if (alreadyMarked && alreadyMarked.checkIn) {
       return res.status(400).json({
         success: false,
-        message: "Employee already checked in today.",
+        message: "You have already checked in for today.",
+        attendance: alreadyMarked,
       });
     }
 
-    const settings = await OfficeSettings.findOne();
-
+    let settings = await OfficeSettings.findOne();
     if (!settings) {
-      return res.status(404).json({
-        success: false,
-        message: "Office settings not found.",
-      });
+      settings = {
+        officeStartTime: "09:00",
+        officeEndTime: "17:00",
+        workingHours: 8,
+        gracePeriod: 10,
+      };
     }
 
     const { now, isLate, lateMinutes } = calculateLateStatus(
@@ -94,127 +87,144 @@ export const checkIn = async (req, res) => {
       settings.gracePeriod
     );
 
-    // Convert AD -> BS
-    const dateBS = nepaliDate();
+    const dateBS = nepaliDate(today);
+    const formattedCheckIn = formatTime(now);
 
-    const attendance = await Attendance.create({
-      employee,
-      dateAD: today,
-      dateBS,
+    const checkInLocationData = {
+      latitude: location?.latitude ?? null,
+      longitude: location?.longitude ?? null,
+      accuracy: location?.accuracy ?? null,
+      address: location?.address || "",
+    };
 
-      status: "Present",
+    let attendance;
+    if (alreadyMarked) {
+      alreadyMarked.status = isLate ? "Late" : "Present";
+      alreadyMarked.checkIn = formattedCheckIn;
+      alreadyMarked.checkInPhoto = photo || null;
+      alreadyMarked.checkInLocation = checkInLocationData;
+      alreadyMarked.isLate = isLate;
+      alreadyMarked.lateMinutes = lateMinutes;
+      await alreadyMarked.save();
+      attendance = alreadyMarked;
+    } else {
+      attendance = await Attendance.create({
+        employee: employeeId,
+        dateAD: today,
+        dateBS,
+        status: isLate ? "Late" : "Present",
+        checkIn: formattedCheckIn,
+        checkInPhoto: photo || null,
+        checkInLocation: checkInLocationData,
+        isLate,
+        lateMinutes,
+        workingHours: 0,
+        overtime: 0,
+      });
+    }
 
-      checkIn: now,
-
-      isLate,
-      lateMinutes,
-
-      workingHours: 0,
-      overtime: 0,
-
-      markedBy: req.user._id,
-    });
+    const populatedAttendance = await Attendance.findById(attendance._id).populate(
+      "employee",
+      "employeeId fullName email department designation role profileImage"
+    );
 
     return res.status(201).json({
       success: true,
-      message: "Check in successful.",
-      attendance,
+      message: "Check in successful with photo and geo-location tag.",
+      attendance: populatedAttendance,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Check In Error:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Server Error",
+      message: error.message || "Server Error",
     });
   }
 };
 
-
+// Employee self check-out with optional photo & geo-location
 export const checkOut = async (req, res) => {
   try {
-    const { employee } = req.body;
+    const employeeId = req.user._id || req.user.id;
+    const { photo, location } = req.body;
 
-    if (!employee) {
-      return res.status(400).json({
-        success: false,
-        message: "Employee is required.",
-      });
-    }
-
-    // Today's date
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Find today's attendance
     const attendance = await Attendance.findOne({
-      employee,
+      employee: employeeId,
       dateAD: today,
     });
 
-    if (!attendance) {
+    if (!attendance || !attendance.checkIn) {
       return res.status(404).json({
         success: false,
-        message: "Employee has not checked in today.",
+        message: "You have not checked in yet today.",
       });
     }
 
-    // Prevent duplicate checkout
     if (attendance.checkOut) {
       return res.status(400).json({
         success: false,
-        message: "Employee has already checked out.",
+        message: "You have already checked out today.",
+        attendance,
       });
     }
 
-    // Check if checkIn exists
-    if (!attendance.checkIn) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid check-in time.",
-      });
-    }
-
-    // Get office settings
-    const officeSetting = await OfficeSettings.findOne();
-
+    let officeSetting = await OfficeSettings.findOne();
     if (!officeSetting) {
-      return res.status(404).json({
-        success: false,
-        message: "Office settings not found.",
-      });
+      officeSetting = {
+        officeStartTime: "09:00",
+        officeEndTime: "17:00",
+        workingHours: 8,
+        gracePeriod: 10,
+      };
     }
 
-    const { now, workingHours, overtime } = calculateCheckoutDetails(attendance.checkIn, officeSetting.officeEndTime);
+    const { now, workingHours, overtime } = calculateCheckoutDetails(
+      attendance.checkIn,
+      officeSetting.officeEndTime
+    );
 
-    attendance.checkOut = now;
+    attendance.checkOut = formatTime(now);
+    if (photo) attendance.checkOutPhoto = photo;
+    if (location) {
+      attendance.checkOutLocation = {
+        latitude: location.latitude ?? null,
+        longitude: location.longitude ?? null,
+        accuracy: location.accuracy ?? null,
+        address: location.address || "",
+      };
+    }
     attendance.workingHours = workingHours;
     attendance.overtime = overtime;
 
-    attendance.markedBy = req.user._id;
-
     await attendance.save();
+
+    const populatedAttendance = await Attendance.findById(attendance._id).populate(
+      "employee",
+      "employeeId fullName email department designation role profileImage"
+    );
 
     return res.status(200).json({
       success: true,
-      message: "Check out successful.",
-      attendance,
+      message: "Check out successful. Have a great day!",
+      attendance: populatedAttendance,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Check Out Error:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Server Error",
-      error: error.message,
+      message: error.message || "Server Error",
     });
   }
 };
 
-
 export const getMyAttendanceHistory = async (req, res) => {
   try {
-    const employeeId = req.user._id;
+    const employeeId = req.user._id || req.user.id;
     const { range = "1w" } = req.query;
 
     const { startDate, endDate } = getDateRange(range);
@@ -248,20 +258,22 @@ export const getMyAttendanceHistory = async (req, res) => {
   }
 };
 
-
+// Admin & Managers query today's attendance to monitor staff
 export const getTodayAttendance = async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const attendance = await Attendance.find({
+    const rawAttendance = await Attendance.find({
       dateAD: today,
     })
       .populate(
         "employee",
-        "employeeId fullName email department designation"
+        "employeeId fullName email department designation profileImage"
       )
       .sort({ checkIn: 1 });
+
+    const attendance = rawAttendance.filter((item) => item.employee != null);
 
     return res.status(200).json({
       success: true,
@@ -277,7 +289,6 @@ export const getTodayAttendance = async (req, res) => {
     });
   }
 };
-
 
 export const getEmployeeAttendanceHistory = async (req, res) => {
   try {
@@ -315,11 +326,11 @@ export const getEmployeeAttendanceHistory = async (req, res) => {
   }
 };
 
-
 export const getMyAttendanceSummary = async (req, res) => {
   try {
-    const employeeId = req.user._id;
-    const { month = "2026-08" } = req.query;
+    const employeeId = req.user._id || req.user.id;
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const { month = currentMonth } = req.query;
 
     const [year, monthNumber] = month.split("-").map(Number);
 
@@ -338,36 +349,36 @@ export const getMyAttendanceSummary = async (req, res) => {
     });
 
     const present = attendance.filter(
-      (item) => item.status === "Present"
+      (item) => item.status === "Present" || item.status === "Half Day"
     ).length;
 
     const late = attendance.filter(
-      (item) => item.isLate === true
+      (item) => item.isLate === true || item.status === "Late"
     ).length;
 
-    /*
-      IMPORTANT:
-      Absent tabhi calculate kar sakte hain jab tumhare DB
-      mein absent attendance records create hote hain.
-    */
     const absent = attendance.filter(
       (item) => item.status === "Absent"
+    ).length;
+
+    const onLeave = attendance.filter(
+      (item) => item.status === "Leave"
     ).length;
 
     const workingDays = attendance.length;
 
     const attendancePercentage =
       workingDays > 0
-        ? Math.round((present / workingDays) * 100)
+        ? Math.round(((present + late) / workingDays) * 100)
         : 0;
 
     return res.status(200).json({
       success: true,
       month,
       summary: {
-        present,
+        present: present + late,
         absent,
         late,
+        onLeave,
         workingDays,
         attendancePercentage,
       },
@@ -382,8 +393,6 @@ export const getMyAttendanceSummary = async (req, res) => {
   }
 };
 
-
-
 export const markAbsentEmployees = async () => {
   try {
     const startOfDay = new Date();
@@ -394,15 +403,10 @@ export const markAbsentEmployees = async () => {
 
     const users = await User.find({
       status: "active",
-      isDeleted : false
+      isDeleted: false,
     });
 
-    console.log("🔥 USERS LENGTH:", users.length);
-    console.log("🔥 USERS:", users);
-
     for (const user of users) {
-      console.log("🔄 PROCESSING USER:", user._id);
-
       const existingAttendance = await Attendance.findOne({
         employee: user._id,
         dateAD: {
@@ -411,10 +415,8 @@ export const markAbsentEmployees = async () => {
         },
       });
 
-      console.log("📋 EXISTING ATTENDANCE:", existingAttendance);
-
       if (!existingAttendance) {
-        const created = await Attendance.create({
+        await Attendance.create({
           employee: user._id,
           dateAD: startOfDay,
           dateBS: nepaliDate(startOfDay),
@@ -424,20 +426,13 @@ export const markAbsentEmployees = async () => {
           workingHours: 0,
           overtime: 0,
         });
-
-        console.log("✅ CREATED:", created._id);
-      } else {
-        console.log("ℹ️ ALREADY EXISTS:", user._id);
       }
     }
-
-    console.log("Absent employees marked successfully");
 
     return {
       success: true,
       message: "Absent employees marked successfully",
     };
-
   } catch (error) {
     console.error("Mark Absent Error:", error);
 
@@ -448,13 +443,11 @@ export const markAbsentEmployees = async () => {
   }
 };
 
-
 export const markAbsentEmployeesController = async (req, res) => {
   try {
     const result = await markAbsentEmployees();
 
     return res.status(200).json(result);
-
   } catch (error) {
     return res.status(500).json({
       success: false,

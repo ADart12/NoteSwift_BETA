@@ -1,11 +1,11 @@
-import User from "../../models/usersModel.js"
-
+import User from "../../models/usersModel.js";
 
 export const getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id)
+    const userId = req.user._id || req.user.id;
+    const user = await User.findById(userId)
       .select("-password")
-      .populate("department");
+      .populate("department", "name code");
 
     if (!user) {
       return res.status(404).json({
@@ -28,12 +28,18 @@ export const getProfile = async (req, res) => {
   }
 };
 
-
 export const updateProfile = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user._id || req.user.id;
 
-    const { name, phone } = req.body;
+    const {
+      fullName,
+      phone,
+      dateOfBirth,
+      address,
+      city,
+      country,
+    } = req.body;
 
     const user = await User.findById(userId);
 
@@ -44,26 +50,23 @@ export const updateProfile = async (req, res) => {
       });
     }
 
-    // Update only provided fields
-    if (name !== undefined) {
-      user.name = name;
-    }
-
-    if (phone !== undefined) {
-      user.phone = phone;
-    }
+    if (fullName !== undefined) user.fullName = fullName.trim();
+    if (phone !== undefined) user.phone = phone.trim();
+    if (dateOfBirth !== undefined) user.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
+    if (address !== undefined) user.address = address.trim();
+    if (city !== undefined) user.city = city.trim();
+    if (country !== undefined) user.country = country.trim();
 
     await user.save();
+
+    const updatedUser = await User.findById(userId)
+      .select("-password")
+      .populate("department", "name code");
 
     return res.status(200).json({
       success: true,
       message: "Profile updated successfully",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-      },
+      user: updatedUser,
     });
   } catch (error) {
     console.error("Update profile error:", error);
@@ -74,4 +77,3 @@ export const updateProfile = async (req, res) => {
     });
   }
 };
-

@@ -1,35 +1,44 @@
 import User from "../models/usersModel.js";
 import Attendance from "../models/attendanceModel.js";
+import Leave from "../models/leaveModel.js";
 import { getDateRange } from "../utils/dateUtils.js";
-import { nepaliDate } from "../utils/dateUtils.js";
 
 export const getDashboardSummary = async (req, res) => {
   try {
-    const todayBS = nepaliDate();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
 
-    const [totalEmployees, presentToday,] = await Promise.all([
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const [totalEmployees, presentToday, lateToday, onLeaveCount] = await Promise.all([
       User.countDocuments({
-        role: { $in: ["employee", "manager", "admin"] },
+        isDeleted: false,
         status: "active",
       }),
 
       Attendance.countDocuments({
-        dateBS: todayBS,
+        dateAD: { $gte: todayStart, $lte: todayEnd },
+        status: { $in: ["Present", "Late", "Half Day"] },
+      }),
+
+      Attendance.countDocuments({
+        dateAD: { $gte: todayStart, $lte: todayEnd },
+        $or: [{ isLate: true }, { status: "Late" }],
+      }),
+
+      Leave.countDocuments({
+        status: "Approved",
+        fromDate: { $lte: todayEnd },
+        toDate: { $gte: todayStart },
       }),
     ]);
 
-    // Replace these according to your schema
-    const lateToday = 0;
-    const onLeave = 0;
-
-    const absentToday =
-      totalEmployees - presentToday - onLeave;
+    const absentToday = Math.max(0, totalEmployees - presentToday - onLeaveCount);
 
     const attendancePercentage =
       totalEmployees > 0
-        ? Number(
-          ((presentToday / totalEmployees) * 100).toFixed(2)
-        )
+        ? Number(((presentToday / totalEmployees) * 100).toFixed(1))
         : 0;
 
     return res.status(200).json({
@@ -39,7 +48,7 @@ export const getDashboardSummary = async (req, res) => {
         presentToday,
         absentToday,
         lateToday,
-        onLeave,
+        onLeave: onLeaveCount,
         attendancePercentage,
       },
     });
@@ -52,8 +61,6 @@ export const getDashboardSummary = async (req, res) => {
     });
   }
 };
-
-
 
 export const getAttendanceOverview = async (req, res) => {
   try {
@@ -70,29 +77,27 @@ export const getAttendanceOverview = async (req, res) => {
           },
         },
       },
-
       {
         $group: {
-          _id: "$dateAD",
-
+          _id: {
+            $dateToString: { format: "%Y-%m-%d", date: "$dateAD" },
+          },
+          dateRaw: { $first: "$dateAD" },
           present: {
             $sum: {
-              $cond: [{ $eq: ["$status", "Present"] }, 1, 0],
+              $cond: [{ $in: ["$status", ["Present", "Half Day"]] }, 1, 0],
             },
           },
-
           late: {
             $sum: {
-              $cond: [{ $eq: ["$status", "Late"] }, 1, 0],
+              $cond: [{ $or: [{ $eq: ["$status", "Late"] }, { $eq: ["$isLate", true] }] }, 1, 0],
             },
           },
-
           leave: {
             $sum: {
               $cond: [{ $eq: ["$status", "Leave"] }, 1, 0],
             },
           },
-
           absent: {
             $sum: {
               $cond: [{ $eq: ["$status", "Absent"] }, 1, 0],
@@ -100,7 +105,6 @@ export const getAttendanceOverview = async (req, res) => {
           },
         },
       },
-
       {
         $sort: {
           _id: 1,
@@ -109,11 +113,10 @@ export const getAttendanceOverview = async (req, res) => {
     ]);
 
     const formattedOverview = overview.map((item) => ({
-      date: item._id.toLocaleDateString("en-GB", {
+      date: new Date(item.dateRaw || item._id).toLocaleDateString("en-GB", {
         day: "2-digit",
         month: "short",
       }),
-
       present: item.present,
       late: item.late,
       leave: item.leave,

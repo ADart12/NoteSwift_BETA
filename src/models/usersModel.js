@@ -43,7 +43,16 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["admin", "manager", "employee"],
+      enum: [
+        "super_admin",
+        "ceo",
+        "c_level",
+        "admin",
+        "manager",
+        "staff",
+        "employee",
+        "client",
+      ],
       default: "employee",
     },
 
@@ -55,6 +64,29 @@ const userSchema = new mongoose.Schema(
     profileImage: {
       type: String,
       default: "",
+    },
+
+    dateOfBirth: {
+      type: Date,
+      default: null,
+    },
+
+    address: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    city: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    country: {
+      type: String,
+      default: "",
+      trim: true,
     },
 
     joiningDate: {

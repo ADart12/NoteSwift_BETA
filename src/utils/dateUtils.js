@@ -1,16 +1,28 @@
 import NepaliDateModule from "nepali-date-converter";
 
-
-const NepaliDate = NepaliDateModule.default;
+const NepaliDate = NepaliDateModule.default || NepaliDateModule;
 
 export const nepaliDate = (date = new Date()) => {
-  const bs = new NepaliDate(date);
-
-  return `${bs.getYear()}-${String(bs.getMonth() + 1).padStart(2, "0")}-${String(bs.getDate()).padStart(2, "0")}`;
+  try {
+    const bs = new NepaliDate(date);
+    return `${bs.getYear()}-${String(bs.getMonth() + 1).padStart(2, "0")}-${String(bs.getDate()).padStart(2, "0")}`;
+  } catch (err) {
+    console.error("Nepali Date conversion error:", err);
+    return new Date().toISOString().split("T")[0];
+  }
 };
 
+export const formatTime = (date = new Date()) => {
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return String(date);
+  let hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  return `${String(hours).padStart(2, "0")}:${minutes} ${ampm}`;
+};
 
-export const calculateLateStatus = (officeStartTime, gracePeriod) => {
+export const calculateLateStatus = (officeStartTime = "09:00", gracePeriod = 10) => {
   const now = new Date();
 
   const [startHour, startMinute] = officeStartTime
@@ -37,36 +49,45 @@ export const calculateLateStatus = (officeStartTime, gracePeriod) => {
   };
 };
 
-
-export const calculateCheckoutDetails = (checkIn, officeEndTime) => {
+export const calculateCheckoutDetails = (checkInRaw, officeEndTime = "17:00") => {
   const now = new Date();
 
-  // Working Hours
-  const workedMilliseconds =
-    now.getTime() - new Date(checkIn).getTime();
+  // Parse checkIn
+  let checkInDate = new Date(checkInRaw);
+  if (isNaN(checkInDate.getTime())) {
+    // If stored as "HH:MM AM/PM"
+    const match = String(checkInRaw).match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (match) {
+      let h = parseInt(match[1], 10);
+      const m = parseInt(match[2], 10);
+      const ampm = match[3].toUpperCase();
+      if (ampm === "PM" && h < 12) h += 12;
+      if (ampm === "AM" && h === 12) h = 0;
+      checkInDate = new Date(now);
+      checkInDate.setHours(h, m, 0, 0);
+    } else {
+      checkInDate = now;
+    }
+  }
 
+  // Working Hours
+  const workedMilliseconds = Math.max(0, now.getTime() - checkInDate.getTime());
   const workingHours = Number(
     (workedMilliseconds / (1000 * 60 * 60)).toFixed(2)
   );
 
   // Office End Time
   const officeEnd = new Date(now);
-
   const [hour, minute] = officeEndTime
     .split(":")
     .map(Number);
-
   officeEnd.setHours(hour, minute, 0, 0);
 
   // Overtime
   let overtime = 0;
-
   if (now > officeEnd) {
     overtime = Number(
-      (
-        (now.getTime() - officeEnd.getTime()) /
-        (1000 * 60 * 60)
-      ).toFixed(2)
+      ((now.getTime() - officeEnd.getTime()) / (1000 * 60 * 60)).toFixed(2)
     );
   }
 
@@ -76,7 +97,6 @@ export const calculateCheckoutDetails = (checkIn, officeEndTime) => {
     overtime,
   };
 };
-
 
 export const getDateRange = (range = "1w") => {
   const endDate = new Date();
@@ -89,30 +109,30 @@ export const getDateRange = (range = "1w") => {
     const startDate = new Date(year, month - 1, 1);
     startDate.setHours(0, 0, 0, 0);
 
-    const endDate = new Date(year, month, 0);
-    endDate.setHours(23, 59, 59, 999);
+    const fullMonthEnd = new Date(year, month, 0);
+    fullMonthEnd.setHours(23, 59, 59, 999);
 
     return {
       startDate,
-      endDate,
+      endDate: fullMonthEnd,
     };
   }
 
   const startDate = new Date(endDate);
 
   switch (range) {
+    case "10d":
+      startDate.setDate(startDate.getDate() - 10);
+      break;
     case "2w":
       startDate.setDate(startDate.getDate() - 14);
       break;
-
     case "1m":
       startDate.setMonth(startDate.getMonth() - 1);
       break;
-
     case "3m":
       startDate.setMonth(startDate.getMonth() - 3);
       break;
-
     case "1w":
     default:
       startDate.setDate(startDate.getDate() - 7);

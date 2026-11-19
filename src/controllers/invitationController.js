@@ -84,32 +84,44 @@ export const sendInvitation = async (req, res) => {
     });
 
     // Registration link
-    const invitationLink =
-      `${process.env.CLIENT_URL}/register?token=${token}`;
+    const clientBase = process.env.CLIENT_URL || "http://localhost:5173";
+    const invitationLink = `${clientBase}/register?token=${token}`;
 
-    // Send email
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL,
-      to: email,
-      subject: "You're invited",
-      html: `
-        <h2>Welcome!</h2>
-        <p>You have been invited to join the Employee Management System.</p>
-        <p>NoteSwift P.V.T</P>
+    let emailSent = false;
+    let emailErrorMsg = "";
 
-        <a href="${invitationLink}">
-          Complete Registration
-        </a>
-
-        <p>This link expires in 24 hours.</p>
-      `,
-    });
+    try {
+      if (resend && process.env.RESEND_API_KEY) {
+        await resend.emails.send({
+          from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
+          to: email,
+          subject: "You're invited to NoteSwift Employee Management",
+          html: `
+            <h2>Welcome to NoteSwift!</h2>
+            <p>Hello ${fullName},</p>
+            <p>You have been invited to join NoteSwift as <strong>${designation}</strong> in <strong>${departmentData.name}</strong>.</p>
+            <p><a href="${invitationLink}" style="display:inline-block;padding:10px 20px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;">Complete Your Registration</a></p>
+            <p>Or copy this link: ${invitationLink}</p>
+            <p>This link expires in 24 hours.</p>
+          `,
+        });
+        emailSent = true;
+      }
+    } catch (mailErr) {
+      console.warn("Resend email delivery skipped or failed:", mailErr.message);
+      emailErrorMsg = mailErr.message;
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Invitation sent successfully.",
+      message: emailSent
+        ? "Invitation email dispatched successfully."
+        : "Invitation created successfully. You can copy and share the invitation link directly.",
       token,
-      invitationLink
+      invitationLink,
+      emailSent,
+      employeeId,
+      notice: emailSent ? null : "Email sending skipped (using direct invitation link fallback).",
     });
 
   } catch (error) {

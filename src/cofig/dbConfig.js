@@ -1,18 +1,16 @@
 import mongoose from 'mongoose';
 
-
-const URL = process.env.MONGO_DB;
-
-export const connectDB = async() => {
-    if(!URL){
-        console.log("please Set environment varibale before continue");
+export const connectDB = async () => {
+    const URL = process.env.MONGO_DB;
+    if (!URL) {
+        console.warn("⚠️ Warning: MONGO_DB environment variable is not set.");
+        return;
     }
-    try{
+    try {
         await mongoose.connect(URL);
-        console.log("mongoDB connected Successfully");
-
-    }catch(error){
-        console.log("MongoDB connection failed", error.message)
+        console.log("✅ MongoDB connected successfully");
+        console.log("Database Name:", mongoose.connection.name);
+    } catch (error) {
+        console.error("❌ MongoDB connection failed:", error.message);
     }
-}
-
+};

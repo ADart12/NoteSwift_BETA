@@ -195,6 +195,8 @@ export const getAllLeaves = async (req, res) => {
             department = "",
             leaveType = "",
             status = "Pending",
+            page = 1,
+            limit = 10,
         } = req.query;
 
         const filter = {};
@@ -267,23 +269,61 @@ export const getAllLeaves = async (req, res) => {
         }
 
         // =========================
-        // Get Leaves
+        // Check for 'all' mode
         // =========================
+        if (page === "all" || limit === "all") {
+            const leaves = await Leave.find(filter)
+                .populate({
+                    path: "employee",
+                    select: "fullName email department designation",
+                    populate: {
+                        path: "department",
+                        select: "name code",
+                    },
+                })
+                .sort({ createdAt: -1 });
 
-        const leaves = await Leave.find(filter)
-            .populate({
-                path: "employee",
-                select: "fullName email department designation",
-                populate: {
-                    path: "department",
-                    select: "name code",
-                },
-            })
-            .sort({ createdAt: -1 });
+            return res.status(200).json({
+                success: true,
+                count: leaves.length,
+                totalLeaves: leaves.length,
+                totalPages: 1,
+                currentPage: 1,
+                leaves,
+            });
+        }
+
+        // =========================
+        // Paginated Query
+        // =========================
+        const pageNumber = Math.max(1, Number(page) || 1);
+        const limitNumber = Math.max(1, Number(limit) || 10);
+        const skip = (pageNumber - 1) * limitNumber;
+
+        const [leaves, totalLeaves] = await Promise.all([
+            Leave.find(filter)
+                .populate({
+                    path: "employee",
+                    select: "fullName email department designation",
+                    populate: {
+                        path: "department",
+                        select: "name code",
+                    },
+                })
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limitNumber),
+            Leave.countDocuments(filter),
+        ]);
+
+        const totalPages = Math.ceil(totalLeaves / limitNumber) || 1;
 
         return res.status(200).json({
             success: true,
             count: leaves.length,
+            totalLeaves,
+            totalPages,
+            currentPage: pageNumber,
             leaves,
         });
 

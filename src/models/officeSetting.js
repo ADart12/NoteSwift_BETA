@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const companySettingsSchema = new mongoose.Schema(
   {
+    companyName: {
+      type: String,
+      default: "Noteswift Pvt. Ltd.",
+    },
+
     officeStartTime: {
       type: String,
       default: "09:00",

@@ -23,9 +23,33 @@ const attendanceSchema = new mongoose.Schema(
       default: null,
     },
 
+    checkInPhoto: {
+      type: String, // base64 or URL
+      default: null,
+    },
+
+    checkInLocation: {
+      latitude: { type: Number, default: null },
+      longitude: { type: Number, default: null },
+      accuracy: { type: Number, default: null },
+      address: { type: String, default: "" },
+    },
+
     checkOut: {
       type: String, // Example: "05:30 PM"
       default: null,
+    },
+
+    checkOutPhoto: {
+      type: String, // base64 or URL
+      default: null,
+    },
+
+    checkOutLocation: {
+      latitude: { type: Number, default: null },
+      longitude: { type: Number, default: null },
+      accuracy: { type: Number, default: null },
+      address: { type: String, default: "" },
     },
 
     workingHours: {

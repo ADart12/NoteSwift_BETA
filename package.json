@@ -8,7 +8,12 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon index.js"
+    "start": "nodemon index.js",
+    "seed:all": "node seedAllSectors.js",
+    "seed:admin": "node seedAdmin.js",
+    "seed:departments": "node seedDeparment.js",
+    "seed:leaves": "node seedLeaves.js",
+    "seed:executive": "node seedExecutiveData.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
