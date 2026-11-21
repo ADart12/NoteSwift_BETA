@@ -42,7 +42,16 @@ const invitationSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["admin", "manager", "employee"],
+      enum: [
+        "super_admin",
+        "ceo",
+        "c_level",
+        "admin",
+        "manager",
+        "staff",
+        "employee",
+        "client",
+      ],
       default: "employee",
     },
 

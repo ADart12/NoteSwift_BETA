@@ -43,25 +43,25 @@ const adminUsersSpec = [
   {
     employeeId: "ADM-001",
     fullName: "System Administrator",
-    email: "admin@noteswift.com",
+    email: "bhattaaditya976@gmail.com",
     rawPassword: "Admin@123",
     role: "admin",
     designation: "System Administrator",
-    phone: "+977 9800000001",
+    phone: "+977 9119078536",
     city: "Kathmandu",
     country: "Nepal",
   },
-  {
-    employeeId: "ADM-002",
-    fullName: "Aaditya Prasad Bhatt (CEO)",
-    email: "ceo@noteswift.com",
-    rawPassword: "Ceo@123",
-    role: "ceo",
-    designation: "Chief Executive Officer (CEO)",
-    phone: "+977 9800000002",
-    city: "Kathmandu",
-    country: "Nepal",
-  },
+  // {
+  //   employeeId: "ADM-002",
+  //   fullName: "Aaditya Prasad Bhatt (CEO)",
+  //   email: "ceo@noteswift.com",
+  //   rawPassword: "Ceo@123",
+  //   role: "ceo",
+  //   designation: "Chief Executive Officer (CEO)",
+  //   phone: "+977 9800000002",
+  //   city: "Kathmandu",
+  //   country: "Nepal",
+  // },
 ];
 
 const seedAdmin = async () => {
