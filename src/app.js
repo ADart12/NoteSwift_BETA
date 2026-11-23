@@ -19,9 +19,16 @@ import ceoDashboardRoutes from "./routes/ceoDashboardRoutes.js";
 
 const app = express();
 
+// 1. NEW: must be right after creating app, before everything else
+app.set("trust proxy", 1);
+
+// 2. CHANGED: allow both local dev and your deployed frontend
 app.use(
     cors({
-        origin: "https://noteswift-beta-frontend.onrender.com", // Vite frontend
+        origin: [
+            "http://localhost:5173",
+            "https://noteswift-beta-frontend.onrender.com",
+        ],
         credentials: true,
     })
 );
@@ -29,6 +36,9 @@ app.use(
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ limit: "15mb", extended: true }));
 app.use(cookieParser());
+
+// 3. NEW: test route, remove later
+app.get("/api/health", (req, res) => res.json({ ok: true }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/invitations", invitationRoutes);
