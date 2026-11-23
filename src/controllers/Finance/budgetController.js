@@ -249,12 +249,6 @@ export const getBudgetStats = async (req, res) => {
       deptMap[deptCode].budgetCount += 1;
     });
 
-    // Default enterprise fallback if DB is pristine
-    if (totalBudget === 0) {
-      totalBudget = 5000000;
-      totalSpent = 1840000;
-    }
-
     const budgetBalance = Math.max(0, totalBudget - totalSpent);
     const utilizationPercentage =
       totalBudget > 0 ? Number(((totalSpent / totalBudget) * 100).toFixed(1)) : 0;
