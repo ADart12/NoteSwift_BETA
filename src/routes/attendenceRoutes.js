@@ -27,11 +27,11 @@ router.get("/my/summary", authMiddleware, getMyAttendanceSummary);
 /* ===================================================
    Admin & Manager Monitoring & Historical Tracking
 =================================================== */
-router.get("/today", authMiddleware, getTodayAttendance);
+router.get("/today", authMiddleware, authorizeRoles("admin", "manager", "c_level"), getTodayAttendance);
 router.get(
   "/:employeeId/history",
   authMiddleware,
-  authorizeRoles("admin", "manager"),
+  authorizeRoles("admin", "manager", "c_level"),
   getEmployeeAttendanceHistory
 );
 

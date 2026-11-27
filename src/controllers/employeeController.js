@@ -16,9 +16,42 @@ export const getEmployees = async (req, res) => {
       limit = 10,
     } = req.query;
 
+    const requestingUser = req.user;
+    const requestingRole = (requestingUser?.role || "").toLowerCase();
+
+    // C-Level employees can only see lower-level staff in their own department
+    // Higher-tier roles: super_admin, ceo, admin → see all
+    const isCLevel = requestingRole === "c_level";
+    const isRestrictedRole = !["super_admin", "ceo", "admin"].includes(requestingRole);
+
     const query = {
       isDeleted: false,
     };
+
+    // ── Department Scoping for C-Level ──────────────────────────────────────
+    // A c_level user may only view employees in their own department,
+    // and only those with roles strictly below c_level (manager, staff, employee).
+    if (isCLevel) {
+      const userDeptId = requestingUser.department?._id || requestingUser.department;
+      if (!userDeptId) {
+        return res.status(403).json({
+          success: false,
+          message: "Access Denied: Your account has no department assigned.",
+        });
+      }
+      // Lock department to the c_level user's own department (ignore query param)
+      query.department = userDeptId;
+      // Exclude c_level and higher roles so they cannot see peers or superiors
+      query.role = { $in: ["manager", "staff", "employee"] };
+    } else if (!["super_admin", "ceo", "admin"].includes(requestingRole)) {
+      // Manager-level: also scope to own department if no explicit filter given
+      if (!department || department === "All") {
+        const userDeptId = requestingUser.department?._id || requestingUser.department;
+        if (userDeptId) {
+          query.department = userDeptId;
+        }
+      }
+    }
 
     // Search by name, email, or employeeId
     if (search) {
@@ -29,8 +62,8 @@ export const getEmployees = async (req, res) => {
       ];
     }
 
-    // Filter by department (ObjectId or Name/Code)
-    if (department && department !== "All") {
+    // Filter by department (ObjectId or Name/Code) — only for non-c_level
+    if (!isCLevel && department && department !== "All") {
       if (mongoose.Types.ObjectId.isValid(department)) {
         query.department = department;
       } else {
@@ -48,7 +81,8 @@ export const getEmployees = async (req, res) => {
       }
     }
 
-    if (role) {
+    // Role filter — only allow if not already set by c_level scoping
+    if (role && !isCLevel) {
       query.role = role.toLowerCase();
     }
 

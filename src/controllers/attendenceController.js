@@ -264,16 +264,37 @@ export const getTodayAttendance = async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    const requestingUser = req.user;
+    const requestingRole = (requestingUser?.role || "").toLowerCase();
+    const isCLevel = requestingRole === "c_level";
+
     const rawAttendance = await Attendance.find({
       dateAD: today,
     })
       .populate(
         "employee",
-        "employeeId fullName email department designation profileImage"
+        "employeeId fullName email department designation profileImage role"
       )
       .sort({ checkIn: 1 });
 
-    const attendance = rawAttendance.filter((item) => item.employee != null);
+    let attendance = rawAttendance.filter((item) => item.employee != null);
+
+    // C-Level: restrict to own department's lower-level staff only
+    // (exclude c_level, ceo, super_admin, admin peers/superiors)
+    if (isCLevel) {
+      const userDeptId = String(
+        requestingUser.department?._id || requestingUser.department || ""
+      );
+      const lowerRoles = ["manager", "staff", "employee"];
+      attendance = attendance.filter((item) => {
+        const emp = item.employee;
+        const empDeptId = String(
+          emp.department?._id || emp.department || ""
+        );
+        const empRole = (emp.role || "").toLowerCase();
+        return empDeptId === userDeptId && lowerRoles.includes(empRole);
+      });
+    }
 
     return res.status(200).json({
       success: true,

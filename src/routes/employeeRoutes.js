@@ -13,13 +13,13 @@ import { authorizeRoles } from "../middleware/authorizeRole.js";
 const router = express.Router();
 
 // Get all employees (with search, filter, pagination)
-router.get("/", protect, authorizeRoles("admin", "manager", "super_admin", "ceo"), getEmployees);
+router.get("/", protect, authorizeRoles("admin", "manager", "super_admin", "ceo", "c_level"), getEmployees);
 
 // Create new employee directly
 router.post("/", protect, authorizeRoles("admin", "manager", "super_admin", "ceo"), createEmployee);
 
 // Get single employee
-router.get("/:id", protect, authorizeRoles("admin", "manager", "super_admin", "ceo"), getEmployeeById);
+router.get("/:id", protect, authorizeRoles("admin", "manager", "super_admin", "ceo", "c_level"), getEmployeeById);
 
 // Update employee details
 router.patch("/:id", protect, authorizeRoles("admin", "manager", "super_admin", "ceo"), updateEmployee);
