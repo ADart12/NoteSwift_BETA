@@ -17,6 +17,7 @@ import invoiceRoutes from "./routes/FinanceRoutes/invoiceRoutes.js";
 import designationRoutes from "./routes/designationRoutes.js";
 import ceoDashboardRoutes from "./routes/ceoDashboardRoutes.js";
 import techDashboardRoutes from "./routes/techDashboardRoutes.js";
+import engineeringRoutes from "./routes/engineeringRoutes.js";
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.use("/api/attendence", attendenceRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/ceo", ceoDashboardRoutes);
 app.use("/api/tech", techDashboardRoutes);
+app.use("/api/engineering", engineeringRoutes);
 app.use("/api/leave", leaveRoutes);
 app.use("/api/department", departmentRoutes);
 app.use("/api/profile", profileRoutes);
